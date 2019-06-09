@@ -5,7 +5,10 @@ use std::fs::File;
 use std::io::prelude::*;
 use piston_window::*;
 
-const MAZE_SIZE: usize = 20;
+const MAZE_SIZE: usize = 10;
+
+// From IOStuff.c in c-maze
+const TILE_SIZE: u32 = 16;
 
 #[derive(Copy, Clone, Debug)]
 struct Loc {
@@ -17,6 +20,30 @@ struct Loc {
 enum Tile {
     Space,
     Wall,
+}
+
+enum Art {
+    Error,
+    Space,
+    Wall,
+    Dark1,
+    Dark2,
+    Goal,
+    CUp,
+    CDown,
+    CRight,
+    CLeft,
+}
+
+fn art_rect(img: Art) -> [f64; 4] {
+    let ti = img as u32;
+    let sheet_width: u32 = TILE_SIZE * 10; // 10 enum variants
+    [
+        (ti % (sheet_width / TILE_SIZE) * TILE_SIZE) as f64,
+        (ti / (sheet_width / TILE_SIZE) * TILE_SIZE) as f64,
+        TILE_SIZE as f64,
+        TILE_SIZE as f64,
+    ]
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -65,12 +92,46 @@ fn main() {
         WindowSettings::new("Hello Piston!", [640, 480])
         .exit_on_esc(true).build().unwrap();
 
+    let mut texture_context = TextureContext {
+        factory: window.factory.clone(),
+        encoder: window.factory.create_command_buffer().into(),
+    };
     let tilesheet = Texture::from_path(
-        &mut window.factory,
-        "tilesheet.xcf",
+        &mut texture_context,
+        "tilesheet.png",
         Flip::None,
-        &TextureSettings::new(),
+        // Change filter from default "Linear" to "Nearest" in order
+        // to not blur pixel-art tiles when scaling them up.
+        &TextureSettings::new().mag(Filter::Nearest),
     ).unwrap();
+
+    let (width, _): (u32,u32) = tilesheet.get_size();
+    println!("Width is {}", width);
+
+    let ti = 1;
+
+    let tile_src: [f64; 4] = [
+        (ti % (width / TILE_SIZE) * TILE_SIZE) as f64,
+        (ti / (width / TILE_SIZE) * TILE_SIZE) as f64,
+        TILE_SIZE as f64,
+        TILE_SIZE as f64,
+    ];
+
+    let img = Image::new();
+
+    // while let Some(e) = window.next() {
+    //     window.draw_2d(&e, |c,g,_| {
+    //         clear([1.0; 4], g);
+
+    //         img.src_rect(art_rect(Art::Wall)).draw(
+    //             &tilesheet,
+    //             &DrawState::default(),
+    //             c.transform.zoom(5.0),
+    //             g,
+    //         );
+    //         // image(&tilesheet, c.transform.zoom(2.0), g);
+    //     });
+    // };
 
     let mut x = 0.0;
     let mut y = 0.0;
@@ -81,10 +142,50 @@ fn main() {
             for y in 0..MAZE_SIZE {
                 for x in 0..MAZE_SIZE {
                     match maze.map[x][y] {
-                        Tile::Wall => rectangle([1.0, 0.0, 0.0, 1.0],
-                                                [25.0 * x as f64, 25.0 * y as f64, 25.0, 25.0],
-                                                c.transform, g),
+                        // Tile::Wall => rectangle([1.0, 0.0, 0.0, 1.0],
+                        //                         [25.0 * x as f64, 25.0 * y as f64, 25.0, 25.0],
+                        //                         c.transform, g),
+                        Tile::Wall => img.src_rect(art_rect(Art::Wall)).draw(
+                            &tilesheet,
+                            &DrawState::default(),
+                            c.transform.trans(
+                                TILE_SIZE as f64 * x as f64,
+                                TILE_SIZE as f64 * y as f64
+                            ),
+                            g
+                        ),
+                        Tile::Space => img.src_rect(art_rect(Art::Space)).draw(
+                            &tilesheet,
+                            &DrawState::default(),
+                            c.transform.trans(
+                                TILE_SIZE as f64 * x as f64,
+                                TILE_SIZE as f64 * y as f64
+                            ),
+                            g
+                        ),
                         _ => ()
+                    }
+                    if maze.start.x == x && maze.start.y == y {
+                        img.src_rect(art_rect(Art::CDown)).draw(
+                            &tilesheet,
+                            &DrawState::default(),
+                            c.transform.trans(
+                                TILE_SIZE as f64 * x as f64,
+                                TILE_SIZE as f64 * y as f64
+                            ),
+                            g
+                        );
+                    }
+                    if maze.goal.x == x && maze.goal.y == y {
+                        img.src_rect(art_rect(Art::Goal)).draw(
+                            &tilesheet,
+                            &DrawState::default(),
+                            c.transform.trans(
+                                TILE_SIZE as f64 * x as f64,
+                                TILE_SIZE as f64 * y as f64
+                            ),
+                            g
+                        );
                     }
                 }
             }
