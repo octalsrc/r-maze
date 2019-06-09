@@ -1,5 +1,5 @@
 [package]
-name = "piston-test"
+name = "r-maze"
 version = "0.1.0"
 authors = ["octalsrc <nicklewchenko92@gmail.com>"]
 edition = "2018"

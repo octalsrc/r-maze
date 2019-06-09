@@ -69,10 +69,19 @@ fn main() {
     let mut y = 0.0;
 
     while let Some(e) = window.next() {
-        for y in 0..MAZE_SIZE {
-            for x in 0..MAZE_SIZE {
+        window.draw_2d(&e, |c, g, _| {
+            clear([1.0; 4], g);
+            for y in 0..MAZE_SIZE {
+                for x in 0..MAZE_SIZE {
+                    match maze.map[x][y] {
+                        Tile::Wall => rectangle([1.0, 0.0, 0.0, 1.0],
+                                                [25.0 * x as f64, 25.0 * y as f64, 25.0, 25.0],
+                                                c.transform, g),
+                        _ => ()
+                    }
+                }
             }
-        }
+        });
     }
 
     // while let Some(e) = window.next() {
