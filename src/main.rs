@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use piston_window::*;
 
-const MAZE_SIZE: usize = 10;
+const MAZE_SIZE: usize = 20;
 
 #[derive(Copy, Clone, Debug)]
 struct Loc {
@@ -64,6 +64,13 @@ fn main() {
     let mut window: PistonWindow = 
         WindowSettings::new("Hello Piston!", [640, 480])
         .exit_on_esc(true).build().unwrap();
+
+    let tilesheet = Texture::from_path(
+        &mut window.factory,
+        "tilesheet.xcf",
+        Flip::None,
+        &TextureSettings::new(),
+    ).unwrap();
 
     let mut x = 0.0;
     let mut y = 0.0;
