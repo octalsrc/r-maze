@@ -216,17 +216,15 @@ fn main() {
     }
 
     while let Some(e) = window.next() {
-        if let Some(Button::Keyboard(Key::D)) = e.press_args() {
-            game.step(Dir::East);
-        }
-        if let Some(Button::Keyboard(Key::A)) = e.press_args() {
-            game.step(Dir::West);
-        }
-        if let Some(Button::Keyboard(Key::W)) = e.press_args() {
-            game.step(Dir::North);
-        }
-        if let Some(Button::Keyboard(Key::S)) = e.press_args() {
-            game.step(Dir::South);
+        match e.press_args() {
+            Some(Button::Keyboard(k)) => match k {
+                Key::W => game.step(Dir::North),
+                Key::S => game.step(Dir::South),
+                Key::A => game.step(Dir::West),
+                Key::D => game.step(Dir::East),
+                _ => (),
+            }
+            _ => (),
         }
 
         window.draw_2d(&e, |c, g, _| {
@@ -251,7 +249,7 @@ fn main() {
                     match game.tile_at(&here) {
                         Some(Tile::Wall) => draw_tile(Art::Wall),
                         Some(Tile::Space) => draw_tile(Art::Space),
-                        _ => ()
+                        _ => draw_tile(Art::Error),
                     }
                     if game.maze.goal == here {
                         draw_tile(Art::Goal);
@@ -264,26 +262,4 @@ fn main() {
             }
         });
     }
-
-    // while let Some(e) = window.next() {
-    //     if let Some(Button::Keyboard(Key::D)) = e.press_args() {
-    //         x += 100.0;
-    //     }
-    //     if let Some(Button::Keyboard(Key::A)) = e.press_args() {
-    //         x -= 100.0;
-    //     }
-    //     if let Some(Button::Keyboard(Key::S)) = e.press_args() {
-    //         y += 100.0;
-    //     }
-    //     if let Some(Button::Keyboard(Key::W)) = e.press_args() {
-    //         y -= 100.0;
-    //     }
-
-    //     window.draw_2d(&e, |c, g, _device| {
-    //         clear([1.0; 4], g);
-    //         rectangle([1.0, 0.0, 0.0, 1.0], // red
-    //                   [x, y, 100.0, 100.0],
-    //                   c.transform, g);
-    //     });
-    // }
 }
