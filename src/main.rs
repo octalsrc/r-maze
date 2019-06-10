@@ -3,25 +3,42 @@ extern crate piston_window;
 
 use std::fs::File;
 use std::io::prelude::*;
+use std::collections::HashMap;
 use piston_window::*;
 
-const MAZE_SIZE: usize = 10;
+/// Static maze width (and height)
+const MAZE_SIZE: isize = 10;
 
-// From IOStuff.c in c-maze
-const ART_SIZE: u32 = 16;
+/// Pixel width (and height) of artsheet tiles
+const ART_SIZE: u32 = 16; // From IOStuff.c in c-maze
 
-#[derive(Copy, Clone, Debug)]
+/// An address in the maze
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 struct Loc {
-    x: usize,
-    y: usize,
+    x: isize,
+    y: isize,
 }
 
-#[derive(Copy, Clone, Debug)]
+impl Loc {
+    fn adj(&self, dir: Dir) -> Loc {
+        Loc{
+            x: self.x + dir.xoff(),
+            y: self.y + dir.yoff()
+        }
+    }
+}
+
+/// A descriptor of the features of a maze location
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 enum Tile {
     Space,
     Wall,
 }
 
+/// Number of tiles in the art sheet
+const ART_NUM: u32 = 10;
+
+/// Names for the tiles in the art sheet
 enum Art {
     Error,
     Space,
@@ -29,19 +46,19 @@ enum Art {
     Dark1,
     Dark2,
     Goal,
-    CUp,
-    CDown,
-    CRight,
-    CLeft,
+    CNorth,
+    CSouth,
+    CEast,
+    CWest,
 }
 
 impl Art {
+    /// Create a ready-to-draw image from an art name
     fn image(self) -> Image {
         let tile_index = self as u32;
-        let sheet_width: u32 = ART_SIZE * 10;
         let rect = [
-            (tile_index % (sheet_width / ART_SIZE) * ART_SIZE) as f64,
-            (tile_index / (sheet_width / ART_SIZE) * ART_SIZE) as f64,
+            (tile_index % ART_NUM * ART_SIZE) as f64,
+            (tile_index / ART_NUM * ART_SIZE) as f64,
             ART_SIZE as f64,
             ART_SIZE as f64,
         ];
@@ -49,13 +66,22 @@ impl Art {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+/// A map of maze tiles, with start and goal positions.  A correctly
+/// constructed maze must have the start and goal positions on
+/// accessible spaces.
+#[derive(Clone, Debug)]
 struct Maze {
     start: Loc,
     goal: Loc,
-    map: [[Tile; MAZE_SIZE]; MAZE_SIZE],
+    map: HashMap<Loc,Tile>,
 }
 
+/// Parse a maze from a text file, in which '.' is a space, '=' is a
+/// wall, 's' is the starting point and 'g' is the goal point.
+///
+/// There can only be one starting point and one goal.  If multiple
+/// 's' or 'g' chars appear in the text file, the last occurrence of
+/// each is used.
 fn parse_maze(fname: &str) -> std::io::Result<Maze> {
     let mut file = File::open(fname)?;
     let mut contents = String::new();
@@ -63,33 +89,108 @@ fn parse_maze(fname: &str) -> std::io::Result<Maze> {
 
     let mut start = Loc{x:0,y:0};
     let mut goal = Loc{x:0,y:0};
-    let mut map = [[Tile::Space; MAZE_SIZE]; MAZE_SIZE];
-    let mut x: usize = 0;
-    let mut y: usize = 0;
+    let mut map = HashMap::new();
+    let mut loc: Loc = Loc{x:0,y:0};
     let mut brk: bool = false;
     for c in contents.chars() {
         match c {
-            '.' => (),
-            ' ' => (),
-            '=' => map[x][y] = Tile::Wall,
-            's' => start = Loc{x,y},
-            'g' => goal = Loc{x,y},
+            '.' => {map.insert(loc.clone(), Tile::Space);},
+            ' ' => {map.insert(loc.clone(), Tile::Space);},
+            '=' => {map.insert(loc.clone(), Tile::Wall);},
+            's' => {
+                map.insert(loc.clone(), Tile::Space);
+                start = loc.clone();
+            },
+            'g' => {
+                map.insert(loc.clone(), Tile::Space);
+                goal = loc.clone();
+            },
             '\n' => brk = true,
             _ => panic!("Don't know that char."),
         }
         if brk {
             brk = false;
-            x = 0;
-            y += 1;
+            loc.x = 0;
+            loc.y += 1;
         } else {
-            x += 1;
+            loc.x += 1;
         }
     }
     Ok(Maze{start, goal, map})
 }
 
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum Dir {
+    North,
+    South,
+    East,
+    West,
+}
+
+impl Dir {
+    fn xoff(&self) -> isize {
+        match self {
+            Dir::East => 1,
+            Dir::West => -1,
+            _ => 0
+        }
+    }
+    fn yoff(&self) -> isize {
+        match self {
+            Dir::North => -1,
+            Dir::South => 1,
+            _ => 0
+        }
+    }
+}
+
+struct Game {
+    maze: Maze,
+    loc: Loc,
+    dir: Dir,
+}
+
+impl Game {
+    /// Make a new game for a maze
+    fn new(maze: Maze) -> Game {
+        let loc = maze.start.clone();
+        Game{maze, loc, dir: Dir::South}
+    }
+    /// Get tile at loc
+    fn tile_at(&self, loc: &Loc) -> Option<Tile> {
+        match self.maze.map.get(loc) {
+            Some(t) => Some(t.clone()),
+            None => None,
+        }
+    }
+    /// Get correct art for character's current state (just depends on
+    /// which direction they're facing).
+    fn c_art(&self) -> Art {
+        match self.dir {
+            Dir::North => Art::CNorth,
+            Dir::South => Art::CSouth,
+            Dir::East => Art::CEast,
+            Dir::West => Art::CWest,
+        }
+    }
+    /// Get tile adjecent to current loc, in given direction
+    fn adj(&self, dir: Dir) -> Option<Tile> {
+        self.tile_at(&self.loc.adj(dir))
+    }
+    /// Move in given direction if possible, or change direction
+    fn step(&mut self, dir: Dir) {
+        if dir == self.dir {
+            if self.adj(dir) == Some(Tile::Space) {
+                self.loc = self.loc.adj(dir);
+            }
+        } else {
+            self.dir = dir;
+        }
+    }
+}
+
 fn main() {
-    let maze: Maze = parse_maze("test-maze.txt").unwrap();
+    let mut game: Game = Game::new(parse_maze("test-maze.txt").unwrap());
 
     let mut window: PistonWindow = 
         WindowSettings::new("Hello Piston!", [640, 480])
@@ -110,15 +211,30 @@ fn main() {
     ).unwrap();
 
     let (width, _): (u32,u32) = tilesheet.get_size();
-    if width != ART_SIZE * 10 {
-        panic!("Wrong tilesheet size.");
+    if width != ART_SIZE * ART_NUM {
+        panic!("Wrong artsheet size.");
     }
 
     while let Some(e) = window.next() {
+        if let Some(Button::Keyboard(Key::D)) = e.press_args() {
+            game.step(Dir::East);
+        }
+        if let Some(Button::Keyboard(Key::A)) = e.press_args() {
+            game.step(Dir::West);
+        }
+        if let Some(Button::Keyboard(Key::W)) = e.press_args() {
+            game.step(Dir::North);
+        }
+        if let Some(Button::Keyboard(Key::S)) = e.press_args() {
+            game.step(Dir::South);
+        }
+
         window.draw_2d(&e, |c, g, _| {
-            clear([1.0; 4], g);
+            clear([0.0; 4], g);
             for y in 0..MAZE_SIZE {
                 for x in 0..MAZE_SIZE {
+
+                    let here = Loc{x,y};
 
                     let mut draw_tile = |a: Art| {
                         a.image().draw(
@@ -132,16 +248,16 @@ fn main() {
                         );
                     };
 
-                    match maze.map[x][y] {
-                        Tile::Wall => draw_tile(Art::Wall),
-                        Tile::Space => draw_tile(Art::Space),
+                    match game.tile_at(&here) {
+                        Some(Tile::Wall) => draw_tile(Art::Wall),
+                        Some(Tile::Space) => draw_tile(Art::Space),
                         _ => ()
                     }
-                    if (maze.goal.x, maze.goal.y) == (x,y) {
+                    if game.maze.goal == here {
                         draw_tile(Art::Goal);
                     }
-                    if (maze.start.x, maze.start.y) == (x,y) {
-                        draw_tile(Art::CDown);
+                    if game.loc == here {
+                        draw_tile(game.c_art());
                     }
 
                 }
