@@ -6,9 +6,6 @@ use std::io::prelude::*;
 use std::collections::HashMap;
 use piston_window::*;
 
-/// Static maze width (and height)
-const MAZE_SIZE: isize = 10;
-
 /// Pixel width (and height) of artsheet tiles
 const ART_SIZE: u32 = 16; // From IOStuff.c in c-maze
 
@@ -229,37 +226,26 @@ fn main() {
 
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
-            for y in 0..MAZE_SIZE {
-                for x in 0..MAZE_SIZE {
 
-                    let here = Loc{x,y};
+            let mut draw_tile = |l: &Loc, a: Art| {
+                let t = c.transform.trans(
+                    ART_SIZE as f64 * l.x as f64,
+                    ART_SIZE as f64 * l.y as f64,
+                );
+                a.image().draw(&tilesheet, &DrawState::default(), t, g);
+            };
 
-                    let mut draw_tile = |a: Art| {
-                        a.image().draw(
-                            &tilesheet,
-                            &DrawState::default(),
-                            c.transform.trans(
-                                ART_SIZE as f64 * x as f64,
-                                ART_SIZE as f64 * y as f64
-                            ),
-                            g
-                        );
-                    };
-
-                    match game.tile_at(&here) {
-                        Some(Tile::Wall) => draw_tile(Art::Wall),
-                        Some(Tile::Space) => draw_tile(Art::Space),
-                        _ => draw_tile(Art::Error),
-                    }
-                    if game.maze.goal == here {
-                        draw_tile(Art::Goal);
-                    }
-                    if game.loc == here {
-                        draw_tile(game.c_art());
-                    }
-
+            // Draw map tiles
+            for (loc,tile) in game.maze.map.iter() {
+                match tile {
+                    Tile::Wall => draw_tile(loc, Art::Wall),
+                    Tile::Space => draw_tile(loc, Art::Space),
                 }
             }
+            // Draw goal
+            draw_tile(&game.maze.goal, Art::Goal);
+            // Draw player character in correct orientation
+            draw_tile(&game.loc, game.c_art());
         });
     }
 }
