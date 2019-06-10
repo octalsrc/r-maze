@@ -6,24 +6,13 @@ use std::io::prelude::*;
 use std::collections::HashMap;
 use piston_window::*;
 
+pub mod geometry;
+
+use crate::geometry::*;
+
 /// Pixel width (and height) of artsheet tiles
 const ART_SIZE: u32 = 16; // From IOStuff.c in c-maze
 
-/// An address in the maze
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
-struct Loc {
-    x: isize,
-    y: isize,
-}
-
-impl Loc {
-    fn adj(&self, dir: Dir) -> Loc {
-        Loc{
-            x: self.x + dir.xoff(),
-            y: self.y + dir.yoff()
-        }
-    }
-}
 
 /// A descriptor of the features of a maze location
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -87,9 +76,11 @@ fn parse_maze(fname: &str) -> std::io::Result<Maze> {
     let mut start = Loc{x:0,y:0};
     let mut goal = Loc{x:0,y:0};
     let mut map = HashMap::new();
-    let mut loc: Loc = Loc{x:0,y:0};
     let mut brk: bool = false;
+    let mut x: isize = 0;
+    let mut y: isize = 0;
     for c in contents.chars() {
+        let loc: Loc = Loc{x,y};
         match c {
             '.' => {map.insert(loc.clone(), Tile::Space);},
             ' ' => {map.insert(loc.clone(), Tile::Space);},
@@ -107,39 +98,15 @@ fn parse_maze(fname: &str) -> std::io::Result<Maze> {
         }
         if brk {
             brk = false;
-            loc.x = 0;
-            loc.y += 1;
+            x = 0;
+            y += 1;
         } else {
-            loc.x += 1;
+            x += 1;
         }
     }
     Ok(Maze{start, goal, map})
 }
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum Dir {
-    North,
-    South,
-    East,
-    West,
-}
-
-impl Dir {
-    fn xoff(&self) -> isize {
-        match self {
-            Dir::East => 1,
-            Dir::West => -1,
-            _ => 0
-        }
-    }
-    fn yoff(&self) -> isize {
-        match self {
-            Dir::North => -1,
-            Dir::South => 1,
-            _ => 0
-        }
-    }
-}
 
 struct Game {
     maze: Maze,
@@ -168,6 +135,7 @@ impl Game {
             Dir::South => Art::CSouth,
             Dir::East => Art::CEast,
             Dir::West => Art::CWest,
+            _ => Art::Error,
         }
     }
     /// Get tile adjecent to current loc, in given direction
@@ -228,9 +196,10 @@ fn main() {
             clear([0.0; 4], g);
 
             let mut draw_tile = |l: &Loc, a: Art| {
+                let (x,y) = l.as_coord();
                 let t = c.transform.trans(
-                    ART_SIZE as f64 * l.x as f64,
-                    ART_SIZE as f64 * l.y as f64,
+                    ART_SIZE as f64 * x,
+                    ART_SIZE as f64 * y,
                 );
                 a.image().draw(&tilesheet, &DrawState::default(), t, g);
             };
