@@ -118,7 +118,7 @@ impl Game {
     /// Make a new game for a maze
     fn new(maze: Maze) -> Game {
         let loc = maze.start.clone();
-        Game{maze, loc, dir: Dir::South}
+        Game{maze, loc, dir: Dir::south()}
     }
     /// Get tile at loc
     fn tile_at(&self, loc: &Loc) -> Option<Tile> {
@@ -130,11 +130,11 @@ impl Game {
     /// Get correct art for character's current state (just depends on
     /// which direction they're facing).
     fn c_art(&self) -> Art {
-        match self.dir {
-            Dir::North => Art::CNorth,
-            Dir::South => Art::CSouth,
-            Dir::East => Art::CEast,
-            Dir::West => Art::CWest,
+        match self.dir.as_int() {
+            0 => Art::CNorth,
+            2 => Art::CEast,
+            4 => Art::CSouth,
+            6 => Art::CWest,
             _ => Art::Error,
         }
     }
@@ -183,10 +183,10 @@ fn main() {
     while let Some(e) = window.next() {
         match e.press_args() {
             Some(Button::Keyboard(k)) => match k {
-                Key::W => game.step(Dir::North),
-                Key::S => game.step(Dir::South),
-                Key::A => game.step(Dir::West),
-                Key::D => game.step(Dir::East),
+                Key::W => game.step(Dir::north()),
+                Key::S => game.step(Dir::south()),
+                Key::A => game.step(Dir::west()),
+                Key::D => game.step(Dir::east()),
                 _ => (),
             }
             _ => (),

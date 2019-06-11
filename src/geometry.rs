@@ -1,30 +1,66 @@
 type Int = isize;
 
+pub const DIR_RESOLUTION: Int = 8;
+
 /// Direction in maze space
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
-pub enum Dir {
-    North,
-    NE,
-    East,
-    SE,
-    South,
-    SW,
-    West,
+pub struct Dir {
+    i: Int,
 }
 
-use Dir::*;
+fn dir(i: Int) -> Dir {
+    Dir{i: i % DIR_RESOLUTION}
+}
 
 impl Dir {
+    pub fn north() -> Dir { dir(0) }
+    pub fn ne() -> Dir    { dir(1) }
+    pub fn east() -> Dir  { dir(2) }
+    pub fn se() -> Dir    { dir(3) }
+    pub fn south() -> Dir { dir(4) }
+    pub fn sw() -> Dir    { dir(5) }
+    pub fn west() -> Dir  { dir(6) }
+    pub fn nw() -> Dir    { dir(7) }
     fn offset(&self) -> (Int, Int) {
-        match self {
-            North => (0,-1),
-            NE => (1,-1),
-            East => (1,0),
-            SE => (1,1),
-            South => (0,1),
-            SW => (-1,1),
-            West => (-1,0),
+        match self.i {
+            0 => (0,-1),
+            1 => (1,-1),
+            2 => (1,0),
+            3 => (1,1),
+            4 => (0,1),
+            5 => (-1,1),
+            6 => (-1,0),
+            7 => (-1,-1),
+            n => panic!(
+                "Direction {} is out of range [0,{}].",
+                n,
+                DIR_RESOLUTION - 1,
+            ),
         }
+    }
+    pub fn turn(&self, a: &Angle) -> Dir {
+        dir(self.i + a.i)
+    }
+    pub fn as_int(&self) -> Int {
+        self.i
+    }
+}
+
+/// Relative direction
+pub struct Angle {
+    i: Int,
+}
+
+impl Angle {
+    pub fn a45() -> Angle { Angle { i: DIR_RESOLUTION / 8 } }
+    pub fn a90() -> Angle { Angle { i: DIR_RESOLUTION / 4 } }
+    pub fn a180() -> Angle { Angle { i: DIR_RESOLUTION / 1 } }
+    pub fn a360() -> Angle { Angle { i: DIR_RESOLUTION } }
+    pub fn reverse(&self) -> Angle {
+        Angle { i: &self.i * -1 }
+    }
+    pub fn as_dir(&self) -> Dir {
+        Dir::north().turn(self)
     }
 }
 
