@@ -82,4 +82,15 @@ impl Loc {
     pub fn as_coords(&self) -> (f64,f64) {
         (self.x as f64, self.y as f64)
     }
+
+    pub fn trans(&self, l: &Loc) -> Loc {
+        Loc{x: self.x + l.x, y: self.y + l.y}
+    }
+
+    pub fn diff(&self, l: &Loc) -> Loc {
+        Loc{x: self.x - l.x, y: self.y - l.y}
+    }
+    pub fn add(&self, l: &Loc) -> Loc {
+        Loc{x: self.x + l.x, y: self.y + l.y}
+    }
 }

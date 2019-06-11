@@ -1,33 +1,30 @@
 extern crate piston;
 extern crate piston_window;
 
-use std::fs::File;
-use std::io::prelude::*;
-use std::collections::HashMap;
+pub mod geometry;
+pub mod mazes;
+
 use piston_window::*;
 
-pub mod geometry;
-
 use crate::geometry::*;
+use crate::mazes::*;
 
 /// Pixel width (and height) of artsheet tiles
 const ART_SIZE: u32 = 16; // From IOStuff.c in c-maze
 
-
-/// A descriptor of the features of a maze location
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum Tile {
-    Space,
-    Wall,
-}
-
 /// Number of tiles in the art sheet
 const ART_NUM: u32 = 10;
+
+/// Draw distance
+const DRAW_DIST: isize = 4;
+
+/// Distance cam falls behind before following
+const CAM_DIST: isize = 1;
 
 /// Names for the tiles in the art sheet
 enum Art {
     Error,
-    Space,
+    Floor,
     Wall,
     Dark1,
     Dark2,
@@ -52,73 +49,23 @@ impl Art {
     }
 }
 
-/// A map of maze tiles, with start and goal positions.  A correctly
-/// constructed maze must have the start and goal positions on
-/// accessible spaces.
-#[derive(Clone, Debug)]
-struct Maze {
-    start: Loc,
-    goal: Loc,
-    map: HashMap<Loc,Tile>,
-}
-
-/// Parse a maze from a text file, in which '.' is a space, '=' is a
-/// wall, 's' is the starting point and 'g' is the goal point.
-///
-/// There can only be one starting point and one goal.  If multiple
-/// 's' or 'g' chars appear in the text file, the last occurrence of
-/// each is used.
-fn parse_maze(fname: &str) -> std::io::Result<Maze> {
-    let mut file = File::open(fname)?;
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-
-    let mut start = Loc{x:0,y:0};
-    let mut goal = Loc{x:0,y:0};
-    let mut map = HashMap::new();
-    let mut brk: bool = false;
-    let mut x: isize = 0;
-    let mut y: isize = 0;
-    for c in contents.chars() {
-        let loc: Loc = Loc{x,y};
-        match c {
-            '.' => {map.insert(loc.clone(), Tile::Space);},
-            ' ' => {map.insert(loc.clone(), Tile::Space);},
-            '=' => {map.insert(loc.clone(), Tile::Wall);},
-            's' => {
-                map.insert(loc.clone(), Tile::Space);
-                start = loc.clone();
-            },
-            'g' => {
-                map.insert(loc.clone(), Tile::Space);
-                goal = loc.clone();
-            },
-            '\n' => brk = true,
-            _ => panic!("Don't know that char."),
-        }
-        if brk {
-            brk = false;
-            x = 0;
-            y += 1;
-        } else {
-            x += 1;
-        }
-    }
-    Ok(Maze{start, goal, map})
-}
-
-
 struct Game {
     maze: Maze,
     loc: Loc,
     dir: Dir,
+    camera: Loc,
 }
 
 impl Game {
     /// Make a new game for a maze
     fn new(maze: Maze) -> Game {
         let loc = maze.start.clone();
-        Game{maze, loc, dir: Dir::south()}
+        Game{
+            maze,
+            loc: loc.clone(),
+            dir: Dir::south(),
+            camera: loc.clone(),
+        }
     }
     /// Get tile at loc
     fn tile_at(&self, loc: &Loc) -> Option<Tile> {
@@ -145,11 +92,24 @@ impl Game {
     /// Move in given direction if possible, or change direction
     fn step(&mut self, dir: Dir) {
         if dir == self.dir {
-            if self.adj(dir) == Some(Tile::Space) {
+            if self.adj(dir) == Some(Tile::Floor) {
                 self.loc = self.loc.adj(dir);
             }
         } else {
             self.dir = dir;
+        }
+    }
+    fn settle_cam(&mut self) {
+        let d = &self.loc.diff(&self.camera);
+        if d.x > CAM_DIST {
+            self.camera.x = self.loc.x - CAM_DIST
+        } else if d.x < -CAM_DIST {
+            self.camera.x = self.loc.x + CAM_DIST
+        }
+        if d.y > CAM_DIST {
+            self.camera.y = self.loc.y - CAM_DIST
+        } else if d.y < -CAM_DIST {
+            self.camera.y = self.loc.y + CAM_DIST
         }
     }
 }
@@ -192,6 +152,8 @@ fn main() {
             _ => (),
         }
 
+        game.settle_cam();
+
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
 
@@ -205,16 +167,27 @@ fn main() {
             };
 
             // Draw map tiles
-            for (loc,tile) in game.maze.map.iter() {
-                match tile {
-                    Tile::Wall => draw_tile(loc, Art::Wall),
-                    Tile::Space => draw_tile(loc, Art::Space),
+            let draw_cam = Loc{ x: DRAW_DIST, y: DRAW_DIST };
+            let map_cam = game.camera.clone();
+
+            for x in 0..(DRAW_DIST * 2 + 1) {
+                for y in 0..(DRAW_DIST * 2 + 1) {
+                    // The point on the screen we are filling in
+                    let draw_loc = Loc{x,y};
+                    // The location in the map we are representing
+                    let map_loc = map_cam.diff(&draw_cam.diff(&draw_loc));
+                    match game.maze.map.get(&map_loc) {
+                        Some(Tile::Floor) => draw_tile(&draw_loc, Art::Floor),
+                        _ => draw_tile(&draw_loc, Art::Wall),
+                    }
+                    if game.maze.goal == map_loc {
+                        draw_tile(&draw_loc, Art::Goal);
+                    }
+                    if game.loc == map_loc {
+                        draw_tile(&draw_loc, game.c_art());
+                    }
                 }
             }
-            // Draw goal
-            draw_tile(&game.maze.goal, Art::Goal);
-            // Draw player character in correct orientation
-            draw_tile(&game.loc, game.c_art());
         });
     }
 }
