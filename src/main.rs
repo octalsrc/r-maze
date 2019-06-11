@@ -119,7 +119,7 @@ impl Game {
 }
 
 fn main() {
-    let mut game: Game = Game::new(parse_maze("test-maze.txt").unwrap());
+    let mut game: Game = Game::new(parse_maze("test-arena.txt").unwrap());
 
     let mut window: PistonWindow = 
         WindowSettings::new("Hello Piston!", [640, 480])
