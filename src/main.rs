@@ -196,7 +196,7 @@ fn main() {
             clear([0.0; 4], g);
 
             let mut draw_tile = |l: &Loc, a: Art| {
-                let (x,y) = l.as_coord();
+                let (x,y) = l.as_coords();
                 let t = c.transform.trans(
                     ART_SIZE as f64 * x,
                     ART_SIZE as f64 * y,

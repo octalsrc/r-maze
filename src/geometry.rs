@@ -1,5 +1,6 @@
 type Int = isize;
 
+/// Direction in maze space
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Dir {
     North,
@@ -27,19 +28,22 @@ impl Dir {
     }
 }
 
-/// An address in the maze
+/// An address in maze space
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub struct Loc {
-    pub x: isize,
-    pub y: isize,
+    pub x: Int,
+    pub y: Int,
 }
 
 impl Loc {
+    /// Get adjacent location in given direction
     pub fn adj(&self, dir: Dir) -> Loc {
         let (x,y) = dir.offset();
         Loc{x: self.x + x, y: self.y + y}
     }
-    pub fn as_coord(&self) -> (f64,f64) {
+    /// Get location as (f64,f64) coordinates, for drawing graphics
+    /// and so on
+    pub fn as_coords(&self) -> (f64,f64) {
         (self.x as f64, self.y as f64)
     }
 }
