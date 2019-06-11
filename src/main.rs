@@ -3,11 +3,14 @@ extern crate piston_window;
 
 pub mod geometry;
 pub mod mazes;
+pub mod light;
 
 use piston_window::*;
+use std::collections::HashMap;
 
 use crate::geometry::*;
 use crate::mazes::*;
+use crate::light::*;
 
 /// Pixel width (and height) of artsheet tiles
 const ART_SIZE: u32 = 16; // From IOStuff.c in c-maze
@@ -16,10 +19,11 @@ const ART_SIZE: u32 = 16; // From IOStuff.c in c-maze
 const ART_NUM: u32 = 10;
 
 /// Draw distance
-const DRAW_DIST: isize = 4;
+const DRAW_DIST: isize = 10;
 
 /// Distance cam falls behind before following
 const CAM_DIST: isize = 1;
+
 
 /// Names for the tiles in the art sheet
 enum Art {
@@ -153,6 +157,8 @@ fn main() {
         }
 
         game.settle_cam();
+        let mut lums = HashMap::new();
+        illuminate(&game.maze, &Source::mk_source(&game.loc, &game.dir), &mut lums);
 
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
@@ -176,17 +182,36 @@ fn main() {
                     let draw_loc = Loc{x,y};
                     // The location in the map we are representing
                     let map_loc = map_cam.diff(&draw_cam.diff(&draw_loc));
-                    match game.maze.map.get(&map_loc) {
-                        Some(Tile::Floor) => draw_tile(&draw_loc, Art::Floor),
-                        _ => draw_tile(&draw_loc, Art::Wall),
-                    }
-                    if game.maze.goal == map_loc {
-                        draw_tile(&draw_loc, Art::Goal);
+                    match (game.maze.map.get(&map_loc), lums.get(&map_loc)) {
+                        (Some(Tile::Floor), Some(n)) => {
+                            if !(*n < DARK2_LIGHT) {
+                                draw_tile(&draw_loc, Art::Floor);
+                                if game.maze.goal == map_loc {
+                                    draw_tile(&draw_loc, Art::Goal);
+                                }
+                                if *n < DARK1_LIGHT {
+                                    draw_tile(&draw_loc, Art::Dark1);
+                                }
+                            }
+                        },
+                        (None, Some(n)) => {
+                            if !(*n < DARK2_LIGHT) {
+                                draw_tile(&draw_loc, Art::Wall);
+                                if *n < DARK1_LIGHT {
+                                    draw_tile(&draw_loc, Art::Dark1);
+                                }
+                            }
+                        },
+                        _ => draw_tile(&draw_loc, Art::Dark2),
                     }
                     if game.loc == map_loc {
                         draw_tile(&draw_loc, game.c_art());
                     }
                 }
+            }
+
+            if game.loc == game.maze.goal {
+                panic!("You win :)");
             }
         });
     }

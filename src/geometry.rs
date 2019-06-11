@@ -9,7 +9,13 @@ pub struct Dir {
 }
 
 fn dir(i: Int) -> Dir {
-    Dir{i: i % DIR_RESOLUTION}
+    let i2 = i % DIR_RESOLUTION;
+    let i3 = if i2 < 0 {
+        i2 + 8
+    } else {
+        i2
+    };
+    Dir{i: i3}
 }
 
 impl Dir {

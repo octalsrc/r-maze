@@ -4,14 +4,14 @@ use std::collections::HashMap;
 
 use crate::geometry::*;
 
-pub struct MazeSeed {
+pub struct MazeGen {
     pub size: usize,
     pub twisty: f64,
     pub swirly: f64,
     pub branchy: f64,
 }
 
-impl MazeSeed {
+impl MazeGen {
     pub fn generate(&self) -> Maze {
         unimplemented!()
     }
