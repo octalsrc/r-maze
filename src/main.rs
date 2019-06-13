@@ -119,7 +119,7 @@ impl Game {
 }
 
 fn main() {
-    let mut game: Game = Game::new(parse_maze("test-arena.txt").unwrap());
+    let mut game: Game = Game::new(parse_maze("test-maze.txt").unwrap());
 
     let mut window: PistonWindow = 
         WindowSettings::new("Hello Piston!", [640, 480])
@@ -210,9 +210,9 @@ fn main() {
                 }
             }
 
-            if game.loc == game.maze.goal {
-                panic!("You win :)");
-            }
         });
+        if game.loc == game.maze.goal {
+            break;
+        }
     }
 }
