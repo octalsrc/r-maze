@@ -5,16 +5,15 @@ This is a Rust re-implementation of the previous
 [`c-maze`](https://github.com/octalsrc/c-maze), which was written in
 C.  Main purpose being to test out the `piston` framework.
 
-This is not yet feature-complete to the original: in particular, the
-game uses a single static maze and there is no flashlight battery
-timeout.
+This is not yet feature-complete to the original: in particular, there
+is no flashlight battery timeout or running control.
 
 Building and running
 --------------------
 
 If you have the Nix package manager, simply run
 
-    $ ./builder.sh
+    $ ./play.sh
 
 This will make the proper X libraries accessible and then perform a
 `cargo run` to launch the game.

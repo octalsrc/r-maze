@@ -1,3 +1,4 @@
+extern crate libc;
 extern crate piston;
 extern crate piston_window;
 
@@ -119,7 +120,7 @@ impl Game {
 }
 
 fn main() {
-    let mut game: Game = Game::new(parse_maze("test-maze.txt").unwrap());
+    let mut game: Game = Game::new(maze_gen::generate(20));
 
     let mut window: PistonWindow = 
         WindowSettings::new("Hello Piston!", [640, 480])

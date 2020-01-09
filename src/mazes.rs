@@ -4,19 +4,6 @@ use std::collections::HashMap;
 
 use crate::geometry::*;
 
-pub struct MazeGen {
-    pub size: usize,
-    pub twisty: f64,
-    pub swirly: f64,
-    pub branchy: f64,
-}
-
-impl MazeGen {
-    pub fn generate(&self) -> Maze {
-        unimplemented!()
-    }
-}
-
 /// A descriptor of the features of a maze location
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum Tile {
@@ -77,3 +64,8 @@ pub fn parse_maze(fname: &str) -> std::io::Result<Maze> {
     }
     Ok(Maze{start, goal, map})
 }
+
+/// The maze generation function re-uses the code from c-maze,
+/// translating the old array-based maze into the new HashMap-based
+/// maze structure.
+pub mod maze_gen;
