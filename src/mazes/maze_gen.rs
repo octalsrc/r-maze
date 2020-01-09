@@ -33,7 +33,9 @@ extern {
         twisty: c_int,
         swirly: c_int,
         branchy: c_int
-    ) -> *const CMaze;
+    ) -> *mut CMaze;
+
+    fn destroy_maze(maze: *mut CMaze);
 }
 
 unsafe fn translate_cmaze(cmaze: *const CMaze) -> Maze {
@@ -74,6 +76,8 @@ pub fn generate(size: i32) -> Maze {
         // Parameters come from their defaults in c-maze, which were
         // found with a bit of trial-and-error to make decent mazes.
         let cmaze = generate_maze(size, 70, 50, 30);
-        translate_cmaze(cmaze)
+        let maze = translate_cmaze(cmaze);
+        destroy_maze(cmaze); // free up tile array
+        maze
     }
 }

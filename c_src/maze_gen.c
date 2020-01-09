@@ -1,4 +1,6 @@
 /*
+ *  Original notice:
+ *
  *  << c-maze, a simple generated maze crawler written in C >>
  *  Copyright (C) 2013 Nick Lewchenko
  *
@@ -216,7 +218,6 @@ void try_branch ( struct mazetile *tiles, int size, struct path_head *last, enum
         if ( try_move ( tiles, size, new_branch, DR_get_adj ( new_branch->p, new_branch->d ), new_branch->d ) )
         {
             add_path ( last, new_branch );
-            /* printf ( "added path at %d, %d with direction %d\n", new_branch->p.x, new_branch->p.y, new_branch->d ); */
         }
     }
     }
@@ -308,7 +309,6 @@ struct maze *generate_maze ( int size, int twisty, int swirly, int branchy )
 {
     int x;
     int y;
-    int r;
     int count = 0;
     int space = 1;
     struct mazetile *tiles;
@@ -348,26 +348,22 @@ struct maze *generate_maze ( int size, int twisty, int swirly, int branchy )
     x = ( int ) ( rand () / ( double ) RAND_MAX * ( ( double ) size - 6 ) ) + 3;
     y = ( int ) ( rand () / ( double ) RAND_MAX * ( ( double ) size - 6 ) ) + 3;
     start_position = DR_new_position ( x, y );
-    printf ( "Starting position at %d, %d\n", x, y );
     tiles[x * size + y].t = SPACE;
 
     root = new_path ( start_position, SOUTH, 80 );
-    printf ( "root created\n" );
-
-    printf ( "Generating maze ... " );
+    printf ( "Generating maze... " );
     x=0;
     while ( space && x < 5000 )
     {
         space = iterate_paths ( tiles, size, root, probs, &count );
         x++;
     }
-    printf ( "\n" );
 
     x = ( int ) ( rand () / ( double ) RAND_MAX * ( ( double ) count_paths ( root ) ) );
 
     goal_position = get_path ( root, x-1 )->p;
 
-    printf ( "finished, destroying paths\n" );
+    printf ( "Done.\n" );
 
     destroy_paths ( root );
 

@@ -7,6 +7,5 @@ fn main() {
         .file("c_src/maze_gen.c")
         .include("c_src")
         .flag("-O")
-        .flag("-Wno-unused-variable")
         .compile("maze_gen");
 }
