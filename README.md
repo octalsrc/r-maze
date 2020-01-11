@@ -5,9 +5,6 @@ This is a Rust re-implementation of the previous
 [`c-maze`](https://github.com/octalsrc/c-maze), which was written in
 C.  Main purpose being to test out the `piston` framework.
 
-This is not yet feature-complete to the original: in particular, there
-is no flashlight battery timeout or running control.
-
 Building and running
 --------------------
 

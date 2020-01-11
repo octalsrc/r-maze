@@ -59,6 +59,7 @@ struct Game {
     loc: Loc,
     dir: Dir,
     camera: Loc,
+    battery: f64,
 }
 
 impl Game {
@@ -70,6 +71,7 @@ impl Game {
             loc: loc.clone(),
             dir: Dir::south(),
             camera: loc.clone(),
+            battery: 100.0,
         }
     }
     /// Get tile at loc
@@ -146,6 +148,13 @@ fn main() {
     }
 
     while let Some(e) = window.next() {
+        if let Some(args) = e.update_args() {
+            game.battery -= args.dt * 4.0;
+        }
+        if game.battery <= 5.0 {
+            println!("Lose.");
+            break;
+        }
         match e.press_args() {
             Some(Button::Keyboard(k)) => match k {
                 Key::W => game.step(Dir::north()),
@@ -159,7 +168,7 @@ fn main() {
 
         game.settle_cam();
         let mut lums = HashMap::new();
-        illuminate(&game.maze, &Source::mk_source(&game.loc, &game.dir), &mut lums);
+        illuminate(&game.maze, &Source::mk_source(&game.loc, &game.dir, game.battery), &mut lums);
 
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
@@ -211,8 +220,16 @@ fn main() {
                 }
             }
 
+            // Draw battery indicator
+            // rectangle([1.0,0.0,0.0,1.0], [1.0,1.0,40.0,10.0], c.transform, g);
+            // rectangle([1.0,1.0,0.0,1.0], [1.0,1.0,40.0 * (game.battery / 100.0),10.0], c.transform, g);
+            rectangle([1.0,1.0,1.0,0.5], [1.0,1.0,50.0,16.0], c.transform, g);
+            rectangle([0.0,0.0,0.0,1.0], [3.0,3.0,46.0,13.0], c.transform, g);
+            rectangle([1.0,1.0,1.0,0.5], [5.0,5.0,42.0 * ((game.battery - 5.0) / 95.0),8.0], c.transform, g);
+
         });
         if game.loc == game.maze.goal {
+            println!("Win.");
             break;
         }
     }

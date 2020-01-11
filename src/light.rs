@@ -34,8 +34,8 @@ pub struct Source {
 }
 
 impl Source {
-    pub fn mk_source(loc: &Loc, dir: &Dir) -> Source {
-        Source{power: INIT_LIGHT, dir: dir.clone(), loc: loc.clone(), kind: SourceKind::Primary}
+    pub fn mk_source(loc: &Loc, dir: &Dir, battery: f64) -> Source {
+        Source{power: INIT_LIGHT * (battery / 100.0), dir: dir.clone(), loc: loc.clone(), kind: SourceKind::Primary}
     }
 }
 
