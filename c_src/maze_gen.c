@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "maze_gen.h"
 #include "internals.h"
@@ -344,6 +345,9 @@ struct maze *generate_maze ( int size, int twisty, int swirly, int branchy )
             tiles[x * size + y] = new_mazetile ( WALL, x, y );
         }
     }
+
+    // Initialize random generator
+    srand ( time ( NULL ) );
 
     x = ( int ) ( rand () / ( double ) RAND_MAX * ( ( double ) size - 6 ) ) + 3;
     y = ( int ) ( rand () / ( double ) RAND_MAX * ( ( double ) size - 6 ) ) + 3;
