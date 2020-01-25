@@ -54,9 +54,27 @@ impl Art {
     }
 }
 
+fn offset_calc(loc: (f64,f64), dir: Dir, offset: f64) -> (f64,f64) {
+    let (x,y) = loc;
+    if dir == Dir::north() {
+        (x, y - offset)
+    } else if dir == Dir::south() {
+        (x, y + offset)
+    } else if dir == Dir::east() {
+        (x + offset, y)
+    } else if dir == Dir::west() {
+        (x - offset, y)
+    } else {
+        (x,y)
+    }
+}
+
 struct Game {
     maze: Maze,
     loc: Loc,
+    offset: Option<f64>,
+    intended_dir: Option<Dir>,
+    speed: f64, // in tiles/sec
     dir: Dir,
     camera: Loc,
     battery: f64,
@@ -69,9 +87,28 @@ impl Game {
         Game{
             maze,
             loc: loc.clone(),
+            offset: None,
             dir: Dir::south(),
+            speed: 5.0,
+            intended_dir: None,
             camera: loc.clone(),
             battery: 100.0,
+        }
+    }
+    fn c_coords(&self) -> (f64,f64) {
+        match self.offset {
+            Some(o) => offset_calc(self.loc.as_coords(), self.dir, o),
+            None => self.loc.as_coords(),
+        }
+    }
+    fn intend(&mut self, dir: Dir) {
+        self.intended_dir = Some(dir);
+    }
+    fn unintend(&mut self, dir: Dir) {
+        if let Some(d) = self.intended_dir {
+            if d == dir {
+                self.intended_dir = None;
+            }
         }
     }
     /// Get tile at loc
@@ -95,6 +132,34 @@ impl Game {
     /// Get tile adjecent to current loc, in given direction
     fn adj(&self, dir: Dir) -> Option<Tile> {
         self.tile_at(&self.loc.adj(dir))
+    }
+    /// Update position if in motion, otherwise set into motion if
+    /// there is intent.
+    fn update(&mut self, dt: f64) {
+        match self.offset {
+            // A Some value means we are in motion
+            Some(o) => {
+                // Move according to speed
+                let o2 = o + dt * self.speed;
+                self.offset = Some(o2);
+                // Check if we have arrived at next tile
+                if o2 >= 1.0 {
+                    // if so, change state to "at rest" on new tile
+                    self.offset = None;
+                    self.loc = self.loc.adj(self.dir);
+                }
+            },
+            // A None value means we are at rest, ready to move anew
+            None => match self.intended_dir {
+                Some(d) => {
+                    self.dir = d;
+                    if self.adj(d) == Some(Tile::Floor) {
+                        self.offset = Some(0.0);
+                    }
+                },
+                None => (),
+            },
+        }
     }
     /// Move in given direction if possible, or change direction
     fn step(&mut self, dir: Dir) {
@@ -150,17 +215,35 @@ fn main() {
     while let Some(e) = window.next() {
         if let Some(args) = e.update_args() {
             game.battery -= args.dt * 4.0;
+            game.update(args.dt);
         }
         if game.battery <= 5.0 {
             println!("Lose.");
             break;
         }
         match e.press_args() {
+            // Some(Button::Keyboard(k)) => match k {
+            //     Key::W => game.step(Dir::north()),
+            //     Key::S => game.step(Dir::south()),
+            //     Key::A => game.step(Dir::west()),
+            //     Key::D => game.step(Dir::east()),
+            //     _ => (),
+            // }
             Some(Button::Keyboard(k)) => match k {
-                Key::W => game.step(Dir::north()),
-                Key::S => game.step(Dir::south()),
-                Key::A => game.step(Dir::west()),
-                Key::D => game.step(Dir::east()),
+                Key::W => game.intend(Dir::north()),
+                Key::S => game.intend(Dir::south()),
+                Key::A => game.intend(Dir::west()),
+                Key::D => game.intend(Dir::east()),
+                _ => (),
+            }
+            _ => (),
+        }
+        match e.release_args() {
+            Some(Button::Keyboard(k)) => match k {
+                Key::W => game.unintend(Dir::north()),
+                Key::S => game.unintend(Dir::south()),
+                Key::A => game.unintend(Dir::west()),
+                Key::D => game.unintend(Dir::east()),
                 _ => (),
             }
             _ => (),
@@ -173,14 +256,26 @@ fn main() {
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
 
-            let mut draw_tile = |l: &Loc, a: Art| {
-                let (x,y) = l.as_coords();
+            let mut draw_tile_c = |cs: (f64,f64), a: Art| {
                 let t = c.transform.trans(
-                    ART_SIZE as f64 * x,
-                    ART_SIZE as f64 * y,
+                    ART_SIZE as f64 * cs.0,
+                    ART_SIZE as f64 * cs.1,
                 );
                 a.image().draw(&tilesheet, &DrawState::default(), t, g);
             };
+
+            let mut draw_tile = |l: &Loc, a: Art| {
+                draw_tile_c(l.as_coords(), a);
+            };
+
+            // let mut draw_tile = |l: &Loc, a: Art| {
+            //     let (x,y) = l.as_coords();
+            //     let t = c.transform.trans(
+            //         ART_SIZE as f64 * x,
+            //         ART_SIZE as f64 * y,
+            //     );
+            //     a.image().draw(&tilesheet, &DrawState::default(), t, g);
+            // };
 
             // Draw map tiles
             let draw_cam = Loc{ x: DRAW_DIST, y: DRAW_DIST };
@@ -214,11 +309,26 @@ fn main() {
                         },
                         _ => draw_tile(&draw_loc, Art::Dark2),
                     }
-                    if game.loc == map_loc {
-                        draw_tile(&draw_loc, game.c_art());
-                    }
+                    // // We need to draw character by different logic
+                    // // to account for offset.
+                    // 
+                    // if game.loc == map_loc {
+                    //     draw_tile(&draw_loc, game.c_art());
+                    // }
                 }
             }
+
+            // Draw character
+
+            // The location on the map of our character
+            let c_loc = game.loc;
+            // The (approximate) location on the screen we are drawing
+            let d_loc = draw_cam.diff(&map_cam.diff(&c_loc));
+            let d_coords = match game.offset {
+                Some(o) => offset_calc(d_loc.as_coords(), game.dir, o),
+                None => d_loc.as_coords(),
+            };
+            draw_tile_c(d_coords, game.c_art());
 
             // Draw battery indicator
             // rectangle([1.0,0.0,0.0,1.0], [1.0,1.0,40.0,10.0], c.transform, g);
