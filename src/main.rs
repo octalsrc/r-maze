@@ -10,6 +10,7 @@ use piston_window::*;
 use std::collections::HashMap;
 
 use crate::geometry::*;
+use RouteResult::{Complete,InProgress};
 use crate::mazes::*;
 use crate::light::*;
 
@@ -23,7 +24,7 @@ const ART_NUM: u32 = 10;
 const DRAW_DIST: isize = 10;
 
 /// Distance cam falls behind before following
-const CAM_DIST: isize = 1;
+const CAM_DIST: f64 = 1.0;
 
 
 /// Names for the tiles in the art sheet
@@ -69,36 +70,36 @@ fn offset_calc(loc: (f64,f64), dir: Dir, offset: f64) -> (f64,f64) {
     }
 }
 
+type LocMode = RouteResult;
+
 struct Game {
     maze: Maze,
-    loc: Loc,
-    offset: Option<f64>,
+    loc: LocMode,
     intended_dir: Option<Dir>,
     speed: f64, // in tiles/sec
     dir: Dir,
-    camera: Loc,
+    camera: FineLoc,
     battery: f64,
 }
 
 impl Game {
     /// Make a new game for a maze
     fn new(maze: Maze) -> Game {
-        let loc = maze.start.clone();
+        let start_loc = maze.start;
         Game{
             maze,
-            loc: loc.clone(),
-            offset: None,
+            loc: Complete(start_loc),
             dir: Dir::south(),
             speed: 5.0,
             intended_dir: None,
-            camera: loc.clone(),
+            camera: FineLoc::from_loc(start_loc),
             battery: 100.0,
         }
     }
     fn c_coords(&self) -> (f64,f64) {
-        match self.offset {
-            Some(o) => offset_calc(self.loc.as_coords(), self.dir, o),
-            None => self.loc.as_coords(),
+        match self.loc {
+            Complete(l) => l.as_coords(),
+            InProgress(r) => r.as_fineloc().as_coords(),
         }
     }
     fn intend(&mut self, dir: Dir) {
@@ -112,8 +113,8 @@ impl Game {
         }
     }
     /// Get tile at loc
-    fn tile_at(&self, loc: &Loc) -> Option<Tile> {
-        match self.maze.map.get(loc) {
+    fn tile_at(&self, loc: Loc) -> Option<Tile> {
+        match self.maze.map.get(&loc) {
             Some(t) => Some(t.clone()),
             None => None,
         }
@@ -131,59 +132,93 @@ impl Game {
     }
     /// Get tile adjecent to current loc, in given direction
     fn adj(&self, dir: Dir) -> Option<Tile> {
-        self.tile_at(&self.loc.adj(dir))
+        match self.loc {
+            Complete(l) => self.tile_at(l.adj(dir)),
+            InProgress(r) => self.tile_at(r.start.adj(dir)),
+        }
     }
     /// Update position if in motion, otherwise set into motion if
     /// there is intent.
     fn update(&mut self, dt: f64) {
-        match self.offset {
-            // A Some value means we are in motion
-            Some(o) => {
-                // Move according to speed
-                let o2 = o + dt * self.speed;
-                self.offset = Some(o2);
-                // Check if we have arrived at next tile
-                if o2 >= 1.0 {
-                    // if so, change state to "at rest" on new tile
-                    self.offset = None;
-                    self.loc = self.loc.adj(self.dir);
-                }
+        match self.loc {
+            InProgress(route) => {
+                self.loc = route.advance(dt);
             },
-            // A None value means we are at rest, ready to move anew
-            None => match self.intended_dir {
+            Complete(loc) => match self.intended_dir {
                 Some(d) => {
                     self.dir = d;
                     if self.adj(d) == Some(Tile::Floor) {
-                        self.offset = Some(0.0);
+                        self.loc = InProgress(TileRoute::new(loc,d));
                     }
                 },
                 None => (),
             },
         }
     }
-    /// Move in given direction if possible, or change direction
-    fn step(&mut self, dir: Dir) {
-        if dir == self.dir {
-            if self.adj(dir) == Some(Tile::Floor) {
-                self.loc = self.loc.adj(dir);
-            }
-        } else {
-            self.dir = dir;
+    fn base_loc(&self) -> Loc {
+        match self.loc {
+            Complete(l) => l,
+            InProgress(r) => r.as_fineloc().base,
         }
     }
+    fn fine_loc(&self) -> FineLoc {
+        match self.loc {
+            Complete(l) => FineLoc::from_loc(l),
+            InProgress(r) => r.as_fineloc(),
+        }
+    }
+    // fn update(&mut self, dt: f64) {
+    //     match self.loc.offset {
+    //         // A Some value means we are in motion
+    //         Some((d,o)) => {
+    //             // Move according to speed
+    //             let o2 = o + dt * self.speed;
+    //             // Check if we have arrived at next tile
+    //             if o2 >= 1.0 {
+    //                 // if so, realign to next tile
+    //                 self.loc = self.loc.realign();
+    //             } else {
+    //                 // else, advance our offset
+    //                 self.loc.offset = Some((d,o2));
+    //             }
+    //         },
+    //         // A None value means we are at rest, ready to move anew
+    //         None => match self.intended_dir {
+    //             Some(d) => {
+    //                 self.dir = d;
+    //                 if self.adj(d) == Some(Tile::Floor) {
+    //                     self.loc.offset = Some((d,0.0));
+    //                 }
+    //             },
+    //             None => (),
+    //         },
+    //     }
+    // }
     fn settle_cam(&mut self) {
-        let d = &self.loc.diff(&self.camera);
-        if d.x > CAM_DIST {
-            self.camera.x = self.loc.x - CAM_DIST
-        } else if d.x < -CAM_DIST {
-            self.camera.x = self.loc.x + CAM_DIST
-        }
-        if d.y > CAM_DIST {
-            self.camera.y = self.loc.y - CAM_DIST
-        } else if d.y < -CAM_DIST {
-            self.camera.y = self.loc.y + CAM_DIST
+        let d = self.fine_loc().sub(self.camera).as_coords();
+        if d.0 > CAM_DIST {
+            self.camera = self.fine_loc().sub(FineLoc::from_coords((CAM_DIST,0.0)))
+        } else if d.0 < -CAM_DIST {
+            self.camera = self.fine_loc().sub(FineLoc::from_coords((-CAM_DIST,0.0)))
+        } else if d.1 > CAM_DIST {
+            self.camera = self.fine_loc().sub(FineLoc::from_coords((0.0,CAM_DIST)))
+        } else if d.1 < CAM_DIST {
+            self.camera = self.fine_loc().sub(FineLoc::from_coords((0.0,-CAM_DIST)))
         }
     }
+    // fn settle_cam(&mut self) {
+    //     let d = self.loc.base_loc.diff(self.camera);
+    //     if d.x > CAM_DIST {
+    //         self.camera.x = self.loc.base_loc.x - CAM_DIST
+    //     } else if d.x < -CAM_DIST {
+    //         self.camera.x = self.loc.base_loc.x + CAM_DIST
+    //     }
+    //     if d.y > CAM_DIST {
+    //         self.camera.y = self.loc.base_loc.y - CAM_DIST
+    //     } else if d.y < -CAM_DIST {
+    //         self.camera.y = self.loc.base_loc.y + CAM_DIST
+    //     }
+    // }
 }
 
 fn main() {
@@ -222,13 +257,6 @@ fn main() {
             break;
         }
         match e.press_args() {
-            // Some(Button::Keyboard(k)) => match k {
-            //     Key::W => game.step(Dir::north()),
-            //     Key::S => game.step(Dir::south()),
-            //     Key::A => game.step(Dir::west()),
-            //     Key::D => game.step(Dir::east()),
-            //     _ => (),
-            // }
             Some(Button::Keyboard(k)) => match k {
                 Key::W => game.intend(Dir::north()),
                 Key::S => game.intend(Dir::south()),
@@ -251,7 +279,7 @@ fn main() {
 
         game.settle_cam();
         let mut lums = HashMap::new();
-        illuminate(&game.maze, &Source::mk_source(&game.loc, &game.dir, game.battery), &mut lums);
+        illuminate(&game.maze, &Source::mk_source(game.base_loc(), game.dir, game.battery), &mut lums);
 
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
@@ -264,81 +292,57 @@ fn main() {
                 a.image().draw(&tilesheet, &DrawState::default(), t, g);
             };
 
-            let mut draw_tile = |l: &Loc, a: Art| {
+            let mut draw_tile = |l: FineLoc, a: Art| {
                 draw_tile_c(l.as_coords(), a);
             };
 
-            // let mut draw_tile = |l: &Loc, a: Art| {
-            //     let (x,y) = l.as_coords();
-            //     let t = c.transform.trans(
-            //         ART_SIZE as f64 * x,
-            //         ART_SIZE as f64 * y,
-            //     );
-            //     a.image().draw(&tilesheet, &DrawState::default(), t, g);
-            // };
-
             // Draw map tiles
-            let draw_cam = Loc{ x: DRAW_DIST, y: DRAW_DIST };
+            let draw_cam = FineLoc::from_loc(Loc{ x: DRAW_DIST, y: DRAW_DIST });
             let map_cam = game.camera.clone();
 
             for x in 0..(DRAW_DIST * 2 + 1) {
                 for y in 0..(DRAW_DIST * 2 + 1) {
                     // The point on the screen we are filling in
-                    let draw_loc = Loc{x,y};
+                    let draw_loc = FineLoc::from_loc(Loc{x,y}).sub(FineLoc::from_coords(map_cam.get_offsets()));
                     // The location in the map we are representing
-                    let map_loc = map_cam.diff(&draw_cam.diff(&draw_loc));
-                    match (game.maze.map.get(&map_loc), lums.get(&map_loc)) {
+                    let map_loc = map_cam.sub(draw_cam.sub(draw_loc));
+                    match (game.maze.map.get(&map_loc.base), lums.get(&map_loc.base)) {
                         (Some(Tile::Floor), Some(n)) => {
                             if !(*n < DARK2_LIGHT) {
-                                draw_tile(&draw_loc, Art::Floor);
-                                if game.maze.goal == map_loc {
-                                    draw_tile(&draw_loc, Art::Goal);
+                                draw_tile(draw_loc, Art::Floor);
+                                if game.maze.goal == map_loc.base {
+                                    draw_tile(draw_loc, Art::Goal);
                                 }
                                 if *n < DARK1_LIGHT {
-                                    draw_tile(&draw_loc, Art::Dark1);
+                                    draw_tile(draw_loc, Art::Dark1);
                                 }
                             }
                         },
                         (None, Some(n)) => {
                             if !(*n < DARK2_LIGHT) {
-                                draw_tile(&draw_loc, Art::Wall);
+                                draw_tile(draw_loc, Art::Wall);
                                 if *n < DARK1_LIGHT {
-                                    draw_tile(&draw_loc, Art::Dark1);
+                                    draw_tile(draw_loc, Art::Dark1);
                                 }
                             }
                         },
-                        _ => draw_tile(&draw_loc, Art::Dark2),
+                        _ => draw_tile(draw_loc, Art::Dark2),
                     }
-                    // // We need to draw character by different logic
-                    // // to account for offset.
-                    // 
-                    // if game.loc == map_loc {
-                    //     draw_tile(&draw_loc, game.c_art());
-                    // }
                 }
             }
 
             // Draw character
-
-            // The location on the map of our character
-            let c_loc = game.loc;
-            // The (approximate) location on the screen we are drawing
-            let d_loc = draw_cam.diff(&map_cam.diff(&c_loc));
-            let d_coords = match game.offset {
-                Some(o) => offset_calc(d_loc.as_coords(), game.dir, o),
-                None => d_loc.as_coords(),
-            };
+            let d_loc = draw_cam.sub(map_cam.sub(game.fine_loc()));
+            // let d_coords = (FineLoc{base: d_loc, offset: game.loc.offset}).as_coords();
+            let d_coords = d_loc.as_coords();
             draw_tile_c(d_coords, game.c_art());
 
-            // Draw battery indicator
-            // rectangle([1.0,0.0,0.0,1.0], [1.0,1.0,40.0,10.0], c.transform, g);
-            // rectangle([1.0,1.0,0.0,1.0], [1.0,1.0,40.0 * (game.battery / 100.0),10.0], c.transform, g);
             rectangle([1.0,1.0,1.0,0.5], [1.0,1.0,50.0,16.0], c.transform, g);
             rectangle([0.0,0.0,0.0,1.0], [3.0,3.0,46.0,13.0], c.transform, g);
             rectangle([1.0,1.0,1.0,0.5], [5.0,5.0,42.0 * ((game.battery - 5.0) / 95.0),8.0], c.transform, g);
 
         });
-        if game.loc == game.maze.goal {
+        if game.base_loc() == game.maze.goal {
             println!("Win.");
             break;
         }
