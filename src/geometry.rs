@@ -97,8 +97,6 @@ impl Loc {
     }
 }
 
-type Offset = (Dir, f64);
-
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub struct FineLoc {
     pub base: Loc,
@@ -212,6 +210,9 @@ impl TileRoute {
         } else {
             RouteResult::InProgress(self)
         }
+    }
+    pub fn get_progress(self) -> f64 {
+        self.progress
     }
     pub fn as_fineloc(self) -> FineLoc {
         let (xo,yo) = if self.dir == Dir::north() {

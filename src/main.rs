@@ -55,21 +55,6 @@ impl Art {
     }
 }
 
-fn offset_calc(loc: (f64,f64), dir: Dir, offset: f64) -> (f64,f64) {
-    let (x,y) = loc;
-    if dir == Dir::north() {
-        (x, y - offset)
-    } else if dir == Dir::south() {
-        (x, y + offset)
-    } else if dir == Dir::east() {
-        (x + offset, y)
-    } else if dir == Dir::west() {
-        (x - offset, y)
-    } else {
-        (x,y)
-    }
-}
-
 type LocMode = RouteResult;
 
 struct Game {
@@ -90,16 +75,10 @@ impl Game {
             maze,
             loc: Complete(start_loc),
             dir: Dir::south(),
-            speed: 5.0,
+            speed: 3.0,
             intended_dir: None,
             camera: FineLoc::from_loc(start_loc),
             battery: 100.0,
-        }
-    }
-    fn c_coords(&self) -> (f64,f64) {
-        match self.loc {
-            Complete(l) => l.as_coords(),
-            InProgress(r) => r.as_fineloc().as_coords(),
         }
     }
     fn intend(&mut self, dir: Dir) {
@@ -142,7 +121,7 @@ impl Game {
     fn update(&mut self, dt: f64) {
         match self.loc {
             InProgress(route) => {
-                self.loc = route.advance(dt);
+                self.loc = route.advance(dt * self.speed);
             },
             Complete(loc) => match self.intended_dir {
                 Some(d) => {
@@ -167,33 +146,6 @@ impl Game {
             InProgress(r) => r.as_fineloc(),
         }
     }
-    // fn update(&mut self, dt: f64) {
-    //     match self.loc.offset {
-    //         // A Some value means we are in motion
-    //         Some((d,o)) => {
-    //             // Move according to speed
-    //             let o2 = o + dt * self.speed;
-    //             // Check if we have arrived at next tile
-    //             if o2 >= 1.0 {
-    //                 // if so, realign to next tile
-    //                 self.loc = self.loc.realign();
-    //             } else {
-    //                 // else, advance our offset
-    //                 self.loc.offset = Some((d,o2));
-    //             }
-    //         },
-    //         // A None value means we are at rest, ready to move anew
-    //         None => match self.intended_dir {
-    //             Some(d) => {
-    //                 self.dir = d;
-    //                 if self.adj(d) == Some(Tile::Floor) {
-    //                     self.loc.offset = Some((d,0.0));
-    //                 }
-    //             },
-    //             None => (),
-    //         },
-    //     }
-    // }
     fn settle_cam(&mut self) {
         let d = self.fine_loc().sub(self.camera).as_coords();
         if d.0 > CAM_DIST {
@@ -206,19 +158,6 @@ impl Game {
             self.camera = self.fine_loc().sub(FineLoc::from_coords((0.0,-CAM_DIST)))
         }
     }
-    // fn settle_cam(&mut self) {
-    //     let d = self.loc.base_loc.diff(self.camera);
-    //     if d.x > CAM_DIST {
-    //         self.camera.x = self.loc.base_loc.x - CAM_DIST
-    //     } else if d.x < -CAM_DIST {
-    //         self.camera.x = self.loc.base_loc.x + CAM_DIST
-    //     }
-    //     if d.y > CAM_DIST {
-    //         self.camera.y = self.loc.base_loc.y - CAM_DIST
-    //     } else if d.y < -CAM_DIST {
-    //         self.camera.y = self.loc.base_loc.y + CAM_DIST
-    //     }
-    // }
 }
 
 fn main() {
@@ -253,7 +192,7 @@ fn main() {
             game.update(args.dt);
         }
         if game.battery <= 5.0 {
-            println!("Lose.");
+            println!("You died.");
             break;
         }
         match e.press_args() {
@@ -279,7 +218,41 @@ fn main() {
 
         game.settle_cam();
         let mut lums = HashMap::new();
-        illuminate(&game.maze, &Source::mk_source(game.base_loc(), game.dir, game.battery), &mut lums);
+        illuminate(
+            &game.maze,
+            &Source::mk_source(game.base_loc(), game.dir, game.battery),
+            &mut lums
+        );
+        match game.loc {
+            // If we are moving, perform a second illumination from
+            // the point of view of our destination and combine the
+            // two light-maps.
+            InProgress(r) => {
+                for lum in lums.values_mut() {
+                    *lum = *lum * (1.0 - r.get_progress());
+                }
+
+                let mut lums2 = HashMap::new();
+                illuminate(
+                    &game.maze,
+                    &Source::mk_source(r.dest(), game.dir, game.battery),
+                    &mut lums2
+                );
+                for lum in lums2.values_mut() {
+                    *lum = *lum * r.get_progress();
+                }
+
+                for loc in lums2.keys() {
+                    if let Some(lum) = lums.get(loc) {
+                        let lum1 = *lum;
+                        lums.insert(*loc, lum1 + lums2[loc]);
+                    } else {
+                        lums.insert(*loc, lums2[loc]);
+                    }
+                }
+            }
+            _ => (),
+        }
 
         window.draw_2d(&e, |c, g, _| {
             clear([0.0; 4], g);
@@ -333,7 +306,6 @@ fn main() {
 
             // Draw character
             let d_loc = draw_cam.sub(map_cam.sub(game.fine_loc()));
-            // let d_coords = (FineLoc{base: d_loc, offset: game.loc.offset}).as_coords();
             let d_coords = d_loc.as_coords();
             draw_tile_c(d_coords, game.c_art());
 
@@ -343,7 +315,7 @@ fn main() {
 
         });
         if game.base_loc() == game.maze.goal {
-            println!("Win.");
+            println!("You found the Eye of the Pharaohs.");
             break;
         }
     }

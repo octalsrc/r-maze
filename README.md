@@ -26,4 +26,5 @@ Controls: `W-A-S-D` to move, `ESC` to quit.
 
 Your goal is to find the legendary treasure known as the *Eye of the
 Pharaohs*.  This task is complicated by a maze of dark, twisty
-hallways lit only by your flashlight.
+hallways lit only by your flashlight.  And your flashlight's battery
+is running out.
