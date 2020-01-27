@@ -820,6 +820,7 @@ name = "r-maze"
 version = "0.1.0"
 dependencies = [
  "cc 1.0.50 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gfx_device_gl 0.15.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.66 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston 0.46.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston_window 0.96.0 (registry+https://github.com/rust-lang/crates.io-index)",

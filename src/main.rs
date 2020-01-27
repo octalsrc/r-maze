@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate gfx_device_gl;
 extern crate piston;
 extern crate piston_window;
 
@@ -160,6 +161,106 @@ impl Game {
     }
 }
 
+fn render<E>(game: &Game, window: &mut PistonWindow, e: E, tilesheet: &Texture<gfx_device_gl::Resources>) where E: piston_window::GenericEvent {
+    let mut lums = HashMap::new();
+    illuminate(
+        &game.maze,
+        &Source::mk_source(game.base_loc(), game.dir, game.battery),
+        &mut lums
+    );
+    match game.loc {
+        // If we are moving, perform a second illumination from
+        // the point of view of our destination and combine the
+        // two light-maps.
+        InProgress(r) => {
+            for lum in lums.values_mut() {
+                *lum = *lum * (1.0 - r.get_progress());
+            }
+
+            let mut lums2 = HashMap::new();
+            illuminate(
+                &game.maze,
+                &Source::mk_source(r.dest(), game.dir, game.battery),
+                &mut lums2
+            );
+            for lum in lums2.values_mut() {
+                *lum = *lum * r.get_progress();
+            }
+
+            for loc in lums2.keys() {
+                if let Some(lum) = lums.get(loc) {
+                    let lum1 = *lum;
+                    lums.insert(*loc, lum1 + lums2[loc]);
+                } else {
+                    lums.insert(*loc, lums2[loc]);
+                }
+            }
+        }
+        _ => (),
+    }
+
+    window.draw_2d(&e, |c, g, _| {
+        clear([0.0; 4], g);
+
+        let mut draw_tile_c = |cs: (f64,f64), a: Art| {
+            let t = c.transform.trans(
+                ART_SIZE as f64 * cs.0,
+                ART_SIZE as f64 * cs.1,
+            );
+            a.image().draw(tilesheet, &DrawState::default(), t, g);
+        };
+
+        let mut draw_tile = |l: FineLoc, a: Art| {
+            draw_tile_c(l.as_coords(), a);
+        };
+
+        // Draw map tiles
+        let draw_cam = FineLoc::from_loc(Loc{ x: DRAW_DIST, y: DRAW_DIST });
+        let map_cam = game.camera.clone();
+
+        for x in 0..(DRAW_DIST * 2 + 1) {
+            for y in 0..(DRAW_DIST * 2 + 1) {
+                // The point on the screen we are filling in
+                let draw_loc = FineLoc::from_loc(Loc{x,y}).sub(FineLoc::from_coords(map_cam.get_offsets()));
+                // The location in the map we are representing
+                let map_loc = map_cam.sub(draw_cam.sub(draw_loc));
+                match (game.maze.map.get(&map_loc.base), lums.get(&map_loc.base)) {
+                    (Some(Tile::Floor), Some(n)) => {
+                        if !(*n < DARK2_LIGHT) {
+                            draw_tile(draw_loc, Art::Floor);
+                            if game.maze.goal == map_loc.base {
+                                draw_tile(draw_loc, Art::Goal);
+                            }
+                            if *n < DARK1_LIGHT {
+                                draw_tile(draw_loc, Art::Dark1);
+                            }
+                        }
+                    },
+                    (None, Some(n)) => {
+                        if !(*n < DARK2_LIGHT) {
+                            draw_tile(draw_loc, Art::Wall);
+                            if *n < DARK1_LIGHT {
+                                draw_tile(draw_loc, Art::Dark1);
+                            }
+                        }
+                    },
+                    _ => draw_tile(draw_loc, Art::Dark2),
+                }
+            }
+        }
+
+        // Draw character
+        let d_loc = draw_cam.sub(map_cam.sub(game.fine_loc()));
+        let d_coords = d_loc.as_coords();
+        draw_tile_c(d_coords, game.c_art());
+
+        rectangle([1.0,1.0,1.0,0.5], [1.0,1.0,50.0,16.0], c.transform, g);
+        rectangle([0.0,0.0,0.0,1.0], [3.0,3.0,46.0,13.0], c.transform, g);
+        rectangle([1.0,1.0,1.0,0.5], [5.0,5.0,42.0 * ((game.battery - 5.0) / 95.0),8.0], c.transform, g);
+
+    });
+}
+
 fn main() {
     let mut game: Game = Game::new(maze_gen::generate(20));
 
@@ -216,104 +317,11 @@ fn main() {
             _ => (),
         }
 
-        game.settle_cam();
-        let mut lums = HashMap::new();
-        illuminate(
-            &game.maze,
-            &Source::mk_source(game.base_loc(), game.dir, game.battery),
-            &mut lums
-        );
-        match game.loc {
-            // If we are moving, perform a second illumination from
-            // the point of view of our destination and combine the
-            // two light-maps.
-            InProgress(r) => {
-                for lum in lums.values_mut() {
-                    *lum = *lum * (1.0 - r.get_progress());
-                }
-
-                let mut lums2 = HashMap::new();
-                illuminate(
-                    &game.maze,
-                    &Source::mk_source(r.dest(), game.dir, game.battery),
-                    &mut lums2
-                );
-                for lum in lums2.values_mut() {
-                    *lum = *lum * r.get_progress();
-                }
-
-                for loc in lums2.keys() {
-                    if let Some(lum) = lums.get(loc) {
-                        let lum1 = *lum;
-                        lums.insert(*loc, lum1 + lums2[loc]);
-                    } else {
-                        lums.insert(*loc, lums2[loc]);
-                    }
-                }
-            }
-            _ => (),
+        if let Some(args) = e.render_args() {
+            game.settle_cam();
+            render(&game, &mut window, e, &tilesheet);
         }
 
-        window.draw_2d(&e, |c, g, _| {
-            clear([0.0; 4], g);
-
-            let mut draw_tile_c = |cs: (f64,f64), a: Art| {
-                let t = c.transform.trans(
-                    ART_SIZE as f64 * cs.0,
-                    ART_SIZE as f64 * cs.1,
-                );
-                a.image().draw(&tilesheet, &DrawState::default(), t, g);
-            };
-
-            let mut draw_tile = |l: FineLoc, a: Art| {
-                draw_tile_c(l.as_coords(), a);
-            };
-
-            // Draw map tiles
-            let draw_cam = FineLoc::from_loc(Loc{ x: DRAW_DIST, y: DRAW_DIST });
-            let map_cam = game.camera.clone();
-
-            for x in 0..(DRAW_DIST * 2 + 1) {
-                for y in 0..(DRAW_DIST * 2 + 1) {
-                    // The point on the screen we are filling in
-                    let draw_loc = FineLoc::from_loc(Loc{x,y}).sub(FineLoc::from_coords(map_cam.get_offsets()));
-                    // The location in the map we are representing
-                    let map_loc = map_cam.sub(draw_cam.sub(draw_loc));
-                    match (game.maze.map.get(&map_loc.base), lums.get(&map_loc.base)) {
-                        (Some(Tile::Floor), Some(n)) => {
-                            if !(*n < DARK2_LIGHT) {
-                                draw_tile(draw_loc, Art::Floor);
-                                if game.maze.goal == map_loc.base {
-                                    draw_tile(draw_loc, Art::Goal);
-                                }
-                                if *n < DARK1_LIGHT {
-                                    draw_tile(draw_loc, Art::Dark1);
-                                }
-                            }
-                        },
-                        (None, Some(n)) => {
-                            if !(*n < DARK2_LIGHT) {
-                                draw_tile(draw_loc, Art::Wall);
-                                if *n < DARK1_LIGHT {
-                                    draw_tile(draw_loc, Art::Dark1);
-                                }
-                            }
-                        },
-                        _ => draw_tile(draw_loc, Art::Dark2),
-                    }
-                }
-            }
-
-            // Draw character
-            let d_loc = draw_cam.sub(map_cam.sub(game.fine_loc()));
-            let d_coords = d_loc.as_coords();
-            draw_tile_c(d_coords, game.c_art());
-
-            rectangle([1.0,1.0,1.0,0.5], [1.0,1.0,50.0,16.0], c.transform, g);
-            rectangle([0.0,0.0,0.0,1.0], [3.0,3.0,46.0,13.0], c.transform, g);
-            rectangle([1.0,1.0,1.0,0.5], [5.0,5.0,42.0 * ((game.battery - 5.0) / 95.0),8.0], c.transform, g);
-
-        });
         if game.base_loc() == game.maze.goal {
             println!("You found the Eye of the Pharaohs.");
             break;
